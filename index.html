@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>YU.ZZZ 代購助手</title>
+    <title>YU.ZZZ Purchasing Assistant (Cloud Sync)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
     <!-- Lucide Icons -->
@@ -13,43 +13,64 @@
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #E2E8F0; border-radius: 10px; }
-        .card-shadow { box-shadow: 0 10px 25px -5px rgba(148, 163, 184, 0.15); }
         .modal-animate { animation: slideUp 0.3s ease-out; }
         @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        
+        .purchased-overlay {
+            background: rgba(240, 249, 255, 0.7);
+            backdrop-filter: blur(3px);
+        }
+        
+        /* Loading Animation */
+        .loader-ring {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        @keyframes bounce-short {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+        .animate-bounce-short {
+            animation: bounce-short 1.5s ease-in-out infinite;
+        }
     </style>
 </head>
 <body class="pb-20">
 
-    <!-- Header -->
-    <header class="sticky top-0 z-30 bg-slate-500/90 backdrop-blur-md border-b border-white/10 shadow-sm">
+    <!-- Top Navigation Bar -->
+    <header class="sticky top-0 z-30 bg-slate-500/95 backdrop-blur-md border-b border-white/10 shadow-sm">
         <div class="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
             <h1 class="text-white font-black tracking-[0.2em] text-lg uppercase">YU.ZZZ LIST</h1>
-            <div id="auth-status" class="text-[10px] text-white/50 font-bold uppercase tracking-widest">Connecting...</div>
+            <div id="auth-status" class="flex items-center gap-2 text-[10px] text-white/60 font-bold uppercase tracking-widest">
+                <div class="loader-ring"></div> Connecting Cloud...
+            </div>
         </div>
     </header>
 
     <main class="max-w-6xl mx-auto px-6 py-8">
-        <!-- 操作欄 -->
+        <!-- Search and Action Area -->
         <div class="flex flex-col md:flex-row gap-4 mb-10">
             <div class="relative flex-1 group">
                 <i data-lucide="search" class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5"></i>
-                <input type="text" id="searchInput" placeholder="搜尋商品、客戶..." 
+                <input type="text" id="searchInput" placeholder="Search products, customers, or tags..." 
                     class="w-full pl-12 pr-4 py-4 rounded-2xl bg-white border-none shadow-sm focus:ring-4 focus:ring-slate-200 outline-none transition-all font-medium text-slate-600">
             </div>
-            <div class="flex gap-3">
-                <button id="exportBtn" class="px-6 py-4 bg-white border border-slate-200 rounded-2xl font-bold text-slate-500 hover:bg-slate-50 transition-all flex items-center gap-2">
-                    <i data-lucide="download" class="w-5 h-5"></i> EXPORT
-                </button>
-                <button id="addBtn" class="px-10 py-4 bg-amber-200 text-amber-800 rounded-2xl font-black shadow-md border-b-4 border-amber-300 active:scale-95 transition-all flex items-center gap-2">
-                    <i data-lucide="plus" class="w-5 h-5"></i> ADD
-                </button>
-            </div>
+            <button id="addBtn" class="px-10 py-4 bg-yellow-100 text-yellow-800 rounded-2xl font-black shadow-md border-b-4 border-yellow-200 active:scale-95 transition-all flex items-center justify-center gap-2">
+                <i data-lucide="plus" class="w-5 h-5"></i> Add Item
+            </button>
         </div>
 
-        <!-- 列表容器 -->
+        <!-- Items Grid -->
         <div id="itemsGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-            <div class="col-span-full text-center py-20 text-slate-300 font-bold tracking-widest uppercase animate-pulse">
-                Fetching Records...
+            <div class="col-span-full text-center py-20 text-slate-300 font-bold uppercase tracking-widest animate-pulse">
+                Syncing with Cloud...
             </div>
         </div>
     </main>
@@ -59,7 +80,7 @@
         <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-md" id="modalOverlay"></div>
         <div class="bg-white rounded-[3rem] w-full max-w-md relative z-10 overflow-hidden shadow-2xl modal-animate border border-white/50">
             <div class="p-8 text-white flex justify-between items-center bg-slate-500">
-                <h2 id="modalTitle" class="text-xl font-black tracking-widest uppercase">ADD NEW</h2>
+                <h2 id="modalTitle" class="text-xl font-black tracking-widest uppercase">Add Item</h2>
                 <button id="closeModal" class="p-2 hover:bg-white/10 rounded-full transition-all">
                     <i data-lucide="x" class="w-6 h-6"></i>
                 </button>
@@ -68,37 +89,35 @@
             <form id="itemForm" class="p-8 space-y-5 max-h-[70vh] overflow-y-auto custom-scrollbar">
                 <input type="hidden" id="editId">
                 <div>
-                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">商品名稱</label>
-                    <input type="text" id="name" required class="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none font-bold text-slate-600 focus:ring-4 focus:ring-slate-100 outline-none" placeholder="如：限定保養品">
+                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Product Name</label>
+                    <input type="text" id="name" required class="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none font-bold text-slate-600 focus:ring-4 focus:ring-slate-100 outline-none" placeholder="">
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">委託客戶</label>
-                        <input type="text" id="customer" class="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none font-bold text-slate-600" placeholder="客戶名">
+                        <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Customer</label>
+                        <input type="text" id="customer" class="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none font-bold text-slate-600 focus:ring-4 focus:ring-slate-100 outline-none" placeholder="">
                     </div>
                     <div>
-                        <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">標籤</label>
-                        <input type="text" id="tags" class="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none font-bold text-slate-600" placeholder="藥妝, 服飾">
+                        <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Category Tags</label>
+                        <input type="text" id="tags" class="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none font-bold text-slate-600 focus:ring-4 focus:ring-slate-100 outline-none" placeholder="">
                     </div>
                 </div>
                 <div>
-                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">圖片</label>
-                    <div class="border-2 border-dashed border-slate-100 rounded-3xl py-10 text-center relative bg-slate-50 hover:bg-slate-100 transition-all cursor-pointer group">
-                        <div id="imagePreview" class="hidden">
+                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Reference Image</label>
+                    <div class="border-2 border-dashed border-slate-100 rounded-3xl py-10 text-center relative bg-slate-50 hover:bg-slate-100 transition-all cursor-pointer">
+                        <div id="imagePreview" class="hidden px-4">
                             <img src="" id="previewImg" class="max-h-32 mx-auto rounded-xl shadow-lg">
                         </div>
                         <div id="uploadPlaceholder">
                             <i data-lucide="image" class="mx-auto w-10 h-10 text-slate-200"></i>
-                            <p class="text-[10px] mt-2 font-black text-slate-300 uppercase tracking-tighter">Click to upload</p>
+                            <p class="text-[10px] mt-2 font-black text-slate-300 uppercase">Click to upload photo</p>
                         </div>
                         <input type="file" id="imageInput" class="absolute inset-0 opacity-0 cursor-pointer" accept="image/*">
                     </div>
                 </div>
-                <div class="flex gap-4 pt-4">
-                    <button type="submit" id="submitBtn" class="flex-1 py-5 bg-amber-200 text-amber-800 font-black rounded-3xl shadow-lg active:scale-95 border-b-4 border-amber-300 transition-all">
-                        CONFIRM
-                    </button>
-                </div>
+                <button type="submit" id="submitBtn" class="w-full py-5 bg-slate-500 text-white font-black rounded-3xl shadow-lg active:scale-95 border-b-4 border-slate-600 transition-all">
+                    SAVE
+                </button>
             </form>
         </div>
     </div>
@@ -109,21 +128,18 @@
         import { getFirestore, collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
-        // Firebase 初始化
         const firebaseConfig = JSON.parse(__firebase_config);
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'proxy-shopping-app';
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'yu-zzz-helper';
 
         let items = [];
         let base64Image = null;
-        let isUserAuthenticated = false;
+        let isAuth = false;
 
-        // 初始化圖示
         lucide.createIcons();
 
-        // 登入處理 (遵循 Rule 3)
         const initAuth = async () => {
             try {
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
@@ -131,212 +147,208 @@
                 } else {
                     await signInAnonymously(auth);
                 }
-            } catch (err) {
-                console.error("Auth initialization failed:", err);
+            } catch (err) { 
+                console.error("Cloud Connection Failed", err); 
+                document.getElementById('auth-status').innerHTML = '<span class="text-red-400">Offline Mode</span>';
             }
         };
 
         onAuthStateChanged(auth, (user) => {
             if (user) {
-                isUserAuthenticated = true;
-                document.getElementById('auth-status').innerText = 'Cloud Sync Active';
+                isAuth = true;
+                document.getElementById('auth-status').innerHTML = '<span class="text-emerald-400">● Cloud Synced</span>';
                 startListening();
             } else {
-                isUserAuthenticated = false;
                 initAuth();
             }
         });
 
-        // 定義資料參考路徑 (遵循 Rule 1)
-        const getProductsCollection = () => collection(db, 'artifacts', appId, 'public', 'data', 'products');
-        const getProductDoc = (id) => doc(db, 'artifacts', appId, 'public', 'data', 'products', id);
+        const getCol = () => collection(db, 'artifacts', appId, 'public', 'data', 'products');
+        const getDocRef = (id) => doc(db, 'artifacts', appId, 'public', 'data', 'products', id);
 
-        // 監聽數據
         function startListening() {
-            if (!isUserAuthenticated) return;
-            
-            const itemsRef = getProductsCollection();
-            
-            onSnapshot(itemsRef, (snapshot) => {
-                items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                renderItems();
+            onSnapshot(getCol(), (snap) => {
+                items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                items.sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
+                render();
             }, (err) => {
-                console.error("Firestore Permission Error:", err);
-                document.getElementById('auth-status').innerText = 'Sync Error - Retrying...';
+                console.error("Sync Error:", err);
             });
         }
 
-        // 渲染列表
-        function renderItems() {
+        function render() {
             const grid = document.getElementById('itemsGrid');
-            const queryText = document.getElementById('searchInput').value.toLowerCase();
-            
-            const filtered = items.filter(item => 
-                (item.name || "").toLowerCase().includes(queryText) || 
-                (item.customer || "").toLowerCase().includes(queryText)
+            const q = document.getElementById('searchInput').value.toLowerCase();
+            const filtered = items.filter(i => 
+                (i.name || "").toLowerCase().includes(q) || 
+                (i.customer || "").toLowerCase().includes(q) ||
+                (i.tags || []).some(t => t.toLowerCase().includes(q))
             );
-
+            
             if (filtered.length === 0) {
-                grid.innerHTML = `<div class="col-span-full text-center py-20 text-slate-300 font-bold uppercase tracking-widest text-xs">No records found</div>`;
+                grid.innerHTML = `<div class="col-span-full text-center py-20 text-slate-300 font-bold uppercase tracking-widest text-xs">No Records Found</div>`;
                 return;
             }
 
-            grid.innerHTML = filtered.map(item => `
-                <div class="bg-white rounded-[2.5rem] overflow-hidden shadow-xl border border-slate-100 flex flex-col group">
+            grid.innerHTML = filtered.map(item => {
+                const isPurchased = item.status === '已採購';
+                const tagHtml = (item.tags || []).map(tag => `<span class="px-2 py-0.5 bg-slate-100 text-[9px] font-bold text-slate-400 rounded-md uppercase tracking-tighter">#${tag}</span>`).join(' ');
+                
+                return `
+                <div class="bg-white rounded-[2.5rem] overflow-hidden shadow-xl border border-slate-100 flex flex-col group transition-all relative">
                     <div class="h-52 relative overflow-hidden bg-slate-50">
-                        ${item.image ? `<img src="${item.image}" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110">` : 
+                        ${item.image ? `<img src="${item.image}" class="w-full h-full object-cover transition-transform duration-700 ${isPurchased ? '' : 'group-hover:scale-110'}">` : 
                           `<div class="w-full h-full flex items-center justify-center text-slate-100"><i data-lucide="image" class="w-14 h-14"></i></div>`}
-                        <div class="absolute top-5 left-5">
-                            <span class="px-4 py-1.5 rounded-full text-[10px] font-black tracking-wider uppercase border ${item.status === '待購' ? 'bg-white/80 text-slate-500 border-white/50' : 'bg-slate-500 text-white border-white/20 shadow-lg'}">
-                                ${item.status}
+                        
+                        ${isPurchased ? `
+                        <div class="absolute inset-0 purchased-overlay flex items-center justify-center z-10">
+                            <div class="flex flex-col items-center animate-bounce-short">
+                                <div class="bg-sky-100 text-sky-600 p-3 rounded-full shadow-lg mb-2">
+                                    <i data-lucide="check" class="w-8 h-8 stroke-[3]"></i>
+                                </div>
+                                <span class="text-white font-black text-[10px] tracking-[0.2em] uppercase bg-slate-500 px-5 py-1.5 rounded-full shadow-md">已採購</span>
+                            </div>
+                        </div>` : `
+                        <div class="absolute top-5 left-5 z-20">
+                            <span class="px-4 py-1.5 rounded-full text-[10px] font-black tracking-wider uppercase bg-white/80 text-slate-500 border border-white/50 shadow-sm backdrop-blur-sm">
+                                ${item.status === '已採購' ? '已採購' : '待採購'}
                             </span>
-                        </div>
+                        </div>`}
                     </div>
-                    <div class="p-7 flex-1 flex flex-col ${item.status === '已採購' ? 'bg-amber-50' : ''}">
+
+                    <div class="p-7 flex-1 flex flex-col ${isPurchased ? 'bg-sky-50/30 opacity-80' : ''}">
                         <h3 class="font-black text-lg mb-1 line-clamp-1 text-slate-700">${item.name}</h3>
-                        <div class="flex items-center gap-2 text-xs font-bold mb-4 text-slate-400">
+                        <div class="flex flex-wrap gap-1 mb-3">${tagHtml}</div>
+                        <div class="flex items-center gap-2 text-xs font-bold mb-6 text-slate-400">
                             <i data-lucide="user" class="w-3.5 h-3.5 opacity-50"></i>
-                            <span>${item.customer || '匿名'}</span>
+                            <span>${item.customer || 'Anonymous'}</span>
                         </div>
-                        <div class="flex flex-wrap gap-2 mb-6 min-h-[24px]">
-                            ${(item.tags || []).map(tag => `<span class="px-3 py-1 bg-slate-100 text-slate-500 rounded-lg text-[10px] font-bold">#${tag}</span>`).join('')}
-                        </div>
+                        
                         <div class="mt-auto flex items-center gap-2 pt-5 border-t border-slate-100/50">
-                            <button onclick="window.editItem('${item.id}')" class="p-3 rounded-2xl hover:bg-slate-100 text-slate-300 transition-all"><i data-lucide="edit-3" class="w-4.5 h-4.5"></i></button>
-                            <button onclick="window.toggleStatus('${item.id}')" class="flex-1 py-3 rounded-2xl text-[11px] font-black flex items-center justify-center gap-2 shadow-sm ${item.status === '待購' ? 'bg-slate-50 text-slate-400 border border-slate-200/50' : 'bg-amber-200 text-amber-800 border-b-2 border-amber-300'}">
-                                ${item.status === '待購' ? '<i data-lucide="check-circle-2" class="w-4 h-4"></i>標記已採購' : '<i data-lucide="rotate-ccw" class="w-4 h-4"></i>回復待購'}
+                            <button onclick="window.edit('${item.id}')" class="p-3 rounded-2xl hover:bg-slate-100 text-slate-300 hover:text-slate-500 transition-all">
+                                <i data-lucide="edit-3" class="w-4.5 h-4.5"></i>
                             </button>
-                            <button onclick="window.deleteItem('${item.id}')" class="p-3 text-slate-100 hover:text-red-300 transition-all"><i data-lucide="trash-2" class="w-4.5 h-4.5"></i></button>
+                            
+                            <button onclick="window.toggle('${item.id}')" 
+                                class="flex-1 py-3 rounded-2xl text-[11px] font-black flex items-center justify-center gap-2 shadow-sm transition-all
+                                ${isPurchased ? 'bg-yellow-100 text-yellow-800 border-b-2 border-yellow-200' : 'bg-slate-50 text-slate-400 border border-slate-200/50'}">
+                                ${isPurchased ? '<i data-lucide="rotate-ccw" class="w-4 h-4"></i> 回復' : '<i data-lucide="check-circle-2" class="w-4 h-4"></i> 標記已採購'}
+                            </button>
+                            
+                            <button onclick="window.del('${item.id}')" class="p-3 text-slate-100 hover:text-red-300 transition-all">
+                                <i data-lucide="trash-2" class="w-4.5 h-4.5"></i>
+                            </button>
                         </div>
                     </div>
                 </div>
-            `).join('');
+            `}).join('');
             lucide.createIcons();
         }
 
-        // 圖片壓縮邏輯
-        document.getElementById('imageInput').addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = function(event) {
+        document.getElementById('imageInput').addEventListener('change', (e) => {
+            const f = e.target.files[0];
+            if (!f) return;
+            const r = new FileReader();
+            r.onload = (ev) => {
                 const img = new Image();
-                img.onload = function() {
+                img.onload = () => {
                     const canvas = document.createElement('canvas');
-                    const MAX_WIDTH = 400; 
+                    const MAX_WIDTH = 400;
                     const scale = MAX_WIDTH / img.width;
                     canvas.width = MAX_WIDTH;
                     canvas.height = img.height * scale;
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
                     base64Image = canvas.toDataURL('image/jpeg', 0.6);
-                    
                     document.getElementById('previewImg').src = base64Image;
                     document.getElementById('imagePreview').classList.remove('hidden');
                     document.getElementById('uploadPlaceholder').classList.add('hidden');
                 };
-                img.src = event.target.result;
+                img.src = ev.target.result;
             };
-            reader.readAsDataURL(file);
+            r.readAsDataURL(f);
         });
 
-        // 表單提交
         document.getElementById('itemForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            if (!isUserAuthenticated) return;
+            if (!isAuth) return;
+            
+            const btn = document.getElementById('submitBtn');
+            btn.disabled = true;
+            btn.innerText = 'Saving...';
 
-            const submitBtn = document.getElementById('submitBtn');
-            submitBtn.disabled = true;
-            submitBtn.innerText = 'SAVING...';
-
-            const editId = document.getElementById('editId').value;
+            const id = document.getElementById('editId').value;
+            const tagInput = document.getElementById('tags').value;
+            const tagList = tagInput ? tagInput.split(/[基,，\s]+/).filter(t => t.trim()) : [];
+            
             const data = {
                 name: document.getElementById('name').value,
                 customer: document.getElementById('customer').value,
-                tags: document.getElementById('tags').value.split(',').map(t => t.trim()).filter(t => t),
+                tags: tagList,
                 image: base64Image,
-                status: editId ? items.find(i => i.id === editId).status : '待購',
+                status: id ? items.find(i => i.id === id).status : '待購',
                 updatedAt: new Date().toISOString()
             };
-
+            
             try {
-                if (editId) {
-                    await updateDoc(getProductDoc(editId), data);
-                } else {
-                    await addDoc(getProductsCollection(), { ...data, createdAt: new Date().toISOString() });
-                }
-                closeModal();
+                if (id) await updateDoc(getDocRef(id), data);
+                else await addDoc(getCol(), { ...data, createdAt: new Date().toISOString() });
+                close();
             } catch (err) {
-                console.error("Save Error:", err);
+                console.error("Save failed", err);
             } finally {
-                submitBtn.disabled = false;
-                submitBtn.innerText = 'CONFIRM';
+                btn.disabled = false;
+                btn.innerText = 'SAVE';
             }
         });
 
-        // 功能導出到 window
-        window.toggleStatus = async (id) => {
-            if (!isUserAuthenticated) return;
-            const item = items.find(i => i.id === id);
-            const newStatus = item.status === '待購' ? '已採購' : '待購';
-            await updateDoc(getProductDoc(id), { status: newStatus });
+        window.toggle = async (id) => {
+            if (!isAuth) return;
+            const i = items.find(x => x.id === id);
+            await updateDoc(getDocRef(id), { 
+                status: i.status === '待採購' ? '已採購' : '待採購',
+                updatedAt: new Date().toISOString()
+            });
         };
-
-        window.deleteItem = async (id) => {
-            if (!isUserAuthenticated) return;
-            if (confirm('確定要刪除嗎？')) {
-                await deleteDoc(getProductDoc(id));
-            }
+        
+        window.del = async (id) => { 
+            if(!isAuth) return;
+            if(confirm('Delete this record from cloud?')) await deleteDoc(getDocRef(id)); 
         };
-
-        window.editItem = (id) => {
-            const item = items.find(i => i.id === id);
-            document.getElementById('editId').value = item.id;
-            document.getElementById('name').value = item.name;
-            document.getElementById('customer').value = item.customer || '';
-            document.getElementById('tags').value = (item.tags || []).join(', ');
-            base64Image = item.image;
-            if (base64Image) {
+        
+        window.edit = (id) => {
+            const i = items.find(x => x.id === id);
+            document.getElementById('editId').value = i.id;
+            document.getElementById('name').value = i.name;
+            document.getElementById('customer').value = i.customer || '';
+            document.getElementById('tags').value = (i.tags || []).join(', ');
+            base64Image = i.image;
+            if(base64Image) {
                 document.getElementById('previewImg').src = base64Image;
                 document.getElementById('imagePreview').classList.remove('hidden');
                 document.getElementById('uploadPlaceholder').classList.add('hidden');
             }
-            document.getElementById('modalTitle').innerText = 'EDIT PRODUCT';
+            document.getElementById('modalTitle').innerText = 'Edit Item';
             document.getElementById('modal').classList.remove('hidden');
         };
 
-        // CSV 導出
-        document.getElementById('exportBtn').addEventListener('click', () => {
-            const headers = ['名稱', '客戶', '狀態'];
-            const csv = "\ufeff" + [headers.join(','), ...items.map(i => [i.name, i.customer, i.status].join(','))].join('\n');
-            const blob = new Blob([csv], { type: 'text/csv' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `購物清單_${new Date().toLocaleDateString()}.csv`;
-            a.click();
-        });
-
-        // 搜尋監聽
-        document.getElementById('searchInput').addEventListener('input', renderItems);
-
-        // Modal 顯隱
-        const openModal = () => {
-            document.getElementById('editId').value = '';
+        const close = () => {
+            document.getElementById('modal').classList.add('hidden');
             document.getElementById('itemForm').reset();
             base64Image = null;
             document.getElementById('imagePreview').classList.add('hidden');
             document.getElementById('uploadPlaceholder').classList.remove('hidden');
-            document.getElementById('modalTitle').innerText = 'ADD NEW';
-            document.getElementById('modal').classList.remove('hidden');
         };
 
-        const closeModal = () => document.getElementById('modal').classList.add('hidden');
-
-        document.getElementById('addBtn').addEventListener('click', openModal);
-        document.getElementById('closeModal').addEventListener('click', closeModal);
-        document.getElementById('modalOverlay').addEventListener('click', closeModal);
+        document.getElementById('addBtn').onclick = () => { 
+            document.getElementById('editId').value=''; 
+            close(); 
+            document.getElementById('modalTitle').innerText = 'Add New Item';
+            document.getElementById('modal').classList.remove('hidden'); 
+        };
+        document.getElementById('closeModal').onclick = close;
+        document.getElementById('modalOverlay').onclick = close;
+        document.getElementById('searchInput').oninput = render;
     </script>
 </body>
 </html>
