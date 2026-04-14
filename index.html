@@ -1,354 +1,284 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>YU.ZZZ Purchasing Assistant (Cloud Sync)</title>
+    <title>YU.ZZZ LIST</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
-    <!-- Lucide Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         body { font-family: 'Noto Sans TC', sans-serif; background-color: #F1F5F9; color: #334155; }
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #E2E8F0; border-radius: 10px; }
-        .modal-animate { animation: slideUp 0.3s ease-out; }
-        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
-        
-        .purchased-overlay {
-            background: rgba(240, 249, 255, 0.7);
-            backdrop-filter: blur(3px);
-        }
-        
-        /* Loading Animation */
-        .loader-ring {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid rgba(255,255,255,.3);
-            border-radius: 50%;
-            border-top-color: #fff;
-            animation: spin 1s ease-in-out infinite;
-        }
+        .purchased-overlay { background: rgba(240, 249, 255, 0.7); backdrop-filter: blur(3px); }
+        .loader-ring { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: #fff; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
-
-        @keyframes bounce-short {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-5px); }
-        }
-        .animate-bounce-short {
-            animation: bounce-short 1.5s ease-in-out infinite;
-        }
+        .modal-animate { animation: slideUp 0.3s ease-out; }
+        @keyframes slideUp { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
     </style>
 </head>
-<body class="pb-20">
+<body class="pb-10">
 
-    <!-- Top Navigation Bar -->
     <header class="sticky top-0 z-30 bg-slate-500/95 backdrop-blur-md border-b border-white/10 shadow-sm">
-        <div class="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
+        <div class="max-w-5xl mx-auto px-6 py-4 flex justify-between items-center">
             <h1 class="text-white font-black tracking-[0.2em] text-lg uppercase">YU.ZZZ LIST</h1>
-            <div id="auth-status" class="flex items-center gap-2 text-[10px] text-white/60 font-bold uppercase tracking-widest">
-                <div class="loader-ring"></div> Connecting Cloud...
+            <div id="status" class="text-[10px] text-white/60 font-bold uppercase tracking-widest flex items-center gap-2">
+                <div class="loader-ring"></div> Connecting
             </div>
         </div>
     </header>
 
-    <main class="max-w-6xl mx-auto px-6 py-8">
-        <!-- Search and Action Area -->
+    <main class="max-w-5xl mx-auto px-6 py-8">
         <div class="flex flex-col md:flex-row gap-4 mb-10">
-            <div class="relative flex-1 group">
+            <div class="relative flex-1">
                 <i data-lucide="search" class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5"></i>
-                <input type="text" id="searchInput" placeholder="Search products, customers, or tags..." 
+                <input type="text" id="searchInput" 
                     class="w-full pl-12 pr-4 py-4 rounded-2xl bg-white border-none shadow-sm focus:ring-4 focus:ring-slate-200 outline-none transition-all font-medium text-slate-600">
             </div>
-            <button id="addBtn" class="px-10 py-4 bg-yellow-100 text-yellow-800 rounded-2xl font-black shadow-md border-b-4 border-yellow-200 active:scale-95 transition-all flex items-center justify-center gap-2">
-                <i data-lucide="plus" class="w-5 h-5"></i> Add Item
+            <button id="addBtn" class="px-10 py-4 bg-yellow-100 text-yellow-800 rounded-2xl font-black shadow-md border-b-4 border-yellow-200 active:scale-95 transition-all flex items-center justify-center gap-2 uppercase tracking-widest">
+                <span class="text-yellow-800 text-xl font-black">+</span> ADD ITEM
             </button>
         </div>
 
-        <!-- Items Grid -->
         <div id="itemsGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-            <div class="col-span-full text-center py-20 text-slate-300 font-bold uppercase tracking-widest animate-pulse">
-                Syncing with Cloud...
-            </div>
+            <div class="col-span-full text-center py-20 text-slate-300 font-bold uppercase tracking-widest animate-pulse text-sm">Initializing...</div>
         </div>
     </main>
 
-    <!-- Modal -->
     <div id="modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-6">
         <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-md" id="modalOverlay"></div>
         <div class="bg-white rounded-[3rem] w-full max-w-md relative z-10 overflow-hidden shadow-2xl modal-animate border border-white/50">
             <div class="p-8 text-white flex justify-between items-center bg-slate-500">
-                <h2 id="modalTitle" class="text-xl font-black tracking-widest uppercase">Add Item</h2>
+                <h2 id="modalTitle" class="text-xl font-black tracking-widest uppercase">ADD ITEM</h2>
                 <button id="closeModal" class="p-2 hover:bg-white/10 rounded-full transition-all">
                     <i data-lucide="x" class="w-6 h-6"></i>
                 </button>
             </div>
             
-            <form id="itemForm" class="p-8 space-y-5 max-h-[70vh] overflow-y-auto custom-scrollbar">
+            <form id="itemForm" class="p-8 space-y-5">
                 <input type="hidden" id="editId">
+                
                 <div>
                     <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Product Name</label>
-                    <input type="text" id="name" required class="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none font-bold text-slate-600 focus:ring-4 focus:ring-slate-100 outline-none" placeholder="">
+                    <input type="text" id="name" required class="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none font-bold text-slate-600 focus:ring-4 focus:ring-slate-100 outline-none transition-all">
                 </div>
+
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Customer</label>
-                        <input type="text" id="customer" class="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none font-bold text-slate-600 focus:ring-4 focus:ring-slate-100 outline-none" placeholder="">
+                        <input type="text" id="customer" class="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none font-bold text-slate-600 focus:ring-4 focus:ring-slate-100 outline-none transition-all">
                     </div>
                     <div>
-                        <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Category Tags</label>
-                        <input type="text" id="tags" class="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none font-bold text-slate-600 focus:ring-4 focus:ring-slate-100 outline-none" placeholder="">
+                        <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Tags</label>
+                        <input type="text" id="tags" class="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none font-bold text-slate-600 focus:ring-4 focus:ring-slate-100 outline-none transition-all">
                     </div>
                 </div>
+                
                 <div>
                     <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Reference Image</label>
-                    <div class="border-2 border-dashed border-slate-100 rounded-3xl py-10 text-center relative bg-slate-50 hover:bg-slate-100 transition-all cursor-pointer">
-                        <div id="imagePreview" class="hidden px-4">
-                            <img src="" id="previewImg" class="max-h-32 mx-auto rounded-xl shadow-lg">
-                        </div>
-                        <div id="uploadPlaceholder">
-                            <i data-lucide="image" class="mx-auto w-10 h-10 text-slate-200"></i>
+                    <div class="relative border-2 border-dashed border-slate-100 rounded-3xl py-10 text-center bg-slate-50 hover:bg-slate-100 transition-all cursor-pointer group">
+                        <img id="previewImg" class="hidden max-h-32 mx-auto rounded-xl shadow-lg mb-2">
+                        <div id="uploadText">
+                            <i data-lucide="image" class="mx-auto w-10 h-10 text-slate-200 group-hover:text-slate-300"></i>
                             <p class="text-[10px] mt-2 font-black text-slate-300 uppercase">Click to upload photo</p>
                         </div>
                         <input type="file" id="imageInput" class="absolute inset-0 opacity-0 cursor-pointer" accept="image/*">
                     </div>
                 </div>
-                <button type="submit" id="submitBtn" class="w-full py-5 bg-slate-500 text-white font-black rounded-3xl shadow-lg active:scale-95 border-b-4 border-slate-600 transition-all">
-                    SAVE
+                
+                <button type="submit" id="saveBtn" class="w-full py-5 bg-slate-500 text-white font-black rounded-3xl shadow-lg active:scale-95 border-b-4 border-slate-600 transition-all uppercase tracking-widest flex items-center justify-center gap-2">
+                    <span class="text-white text-xl font-black">+</span> SAVE
                 </button>
             </form>
         </div>
     </div>
 
-    <!-- Firebase SDKs -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot, doc, deleteDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
-        const firebaseConfig = JSON.parse(__firebase_config);
-        const app = initializeApp(firebaseConfig);
+        const config = JSON.parse(__firebase_config);
+        const app = initializeApp(config);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'yu-zzz-helper';
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'yu-zzz';
 
-        let items = [];
-        let base64Image = null;
-        let isAuth = false;
+        let items = [], base64Img = null;
+        let isReady = false;
 
-        lucide.createIcons();
-
-        const initAuth = async () => {
+        const init = async () => {
+            const statusEl = document.getElementById('status');
             try {
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                     await signInWithCustomToken(auth, __initial_auth_token);
                 } else {
                     await signInAnonymously(auth);
                 }
-            } catch (err) { 
-                console.error("Cloud Connection Failed", err); 
-                document.getElementById('auth-status').innerHTML = '<span class="text-red-400">Offline Mode</span>';
+                isReady = true;
+                statusEl.innerHTML = '<span class="text-emerald-400 font-bold tracking-widest">● Cloud Synced</span>';
+                
+                const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'products');
+                onSnapshot(colRef, (s) => {
+                    items = s.docs.map(d => ({ id: d.id, ...d.data() }));
+                    items.sort((a,b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
+                    render();
+                });
+            } catch (e) {
+                statusEl.innerHTML = '<span class="text-red-300 uppercase tracking-widest font-black">Error</span>';
+                render();
             }
         };
-
-        onAuthStateChanged(auth, (user) => {
-            if (user) {
-                isAuth = true;
-                document.getElementById('auth-status').innerHTML = '<span class="text-emerald-400">● Cloud Synced</span>';
-                startListening();
-            } else {
-                initAuth();
-            }
-        });
-
-        const getCol = () => collection(db, 'artifacts', appId, 'public', 'data', 'products');
-        const getDocRef = (id) => doc(db, 'artifacts', appId, 'public', 'data', 'products', id);
-
-        function startListening() {
-            onSnapshot(getCol(), (snap) => {
-                items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                items.sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
-                render();
-            }, (err) => {
-                console.error("Sync Error:", err);
-            });
-        }
 
         function render() {
             const grid = document.getElementById('itemsGrid');
             const q = document.getElementById('searchInput').value.toLowerCase();
-            const filtered = items.filter(i => 
-                (i.name || "").toLowerCase().includes(q) || 
-                (i.customer || "").toLowerCase().includes(q) ||
+            const list = items.filter(i => 
+                (i.name||'').toLowerCase().includes(q) || 
+                (i.customer||'').toLowerCase().includes(q) ||
                 (i.tags || []).some(t => t.toLowerCase().includes(q))
             );
-            
-            if (filtered.length === 0) {
-                grid.innerHTML = `<div class="col-span-full text-center py-20 text-slate-300 font-bold uppercase tracking-widest text-xs">No Records Found</div>`;
+
+            if (items.length === 0) {
+                grid.innerHTML = `<div class="col-span-full text-center py-20 text-slate-200 font-black text-4xl opacity-50 tracking-[0.4em] uppercase">YU.ZZZ</div>`;
                 return;
             }
 
-            grid.innerHTML = filtered.map(item => {
-                const isPurchased = item.status === '已採購';
-                const tagHtml = (item.tags || []).map(tag => `<span class="px-2 py-0.5 bg-slate-100 text-[9px] font-bold text-slate-400 rounded-md uppercase tracking-tighter">#${tag}</span>`).join(' ');
+            grid.innerHTML = list.map(i => {
+                const done = i.status === '已採購';
+                // 加大標籤字體與內距
+                const tagsHtml = (i.tags || []).map(t => `<span class="bg-slate-100 text-slate-500 px-3 py-1 rounded-lg text-[11px] font-black uppercase tracking-wider shadow-sm">#${t}</span>`).join(' ');
                 
                 return `
-                <div class="bg-white rounded-[2.5rem] overflow-hidden shadow-xl border border-slate-100 flex flex-col group transition-all relative">
-                    <div class="h-52 relative overflow-hidden bg-slate-50">
-                        ${item.image ? `<img src="${item.image}" class="w-full h-full object-cover transition-transform duration-700 ${isPurchased ? '' : 'group-hover:scale-110'}">` : 
-                          `<div class="w-full h-full flex items-center justify-center text-slate-100"><i data-lucide="image" class="w-14 h-14"></i></div>`}
-                        
-                        ${isPurchased ? `
-                        <div class="absolute inset-0 purchased-overlay flex items-center justify-center z-10">
-                            <div class="flex flex-col items-center animate-bounce-short">
-                                <div class="bg-sky-100 text-sky-600 p-3 rounded-full shadow-lg mb-2">
-                                    <i data-lucide="check" class="w-8 h-8 stroke-[3]"></i>
-                                </div>
-                                <span class="text-white font-black text-[10px] tracking-[0.2em] uppercase bg-slate-500 px-5 py-1.5 rounded-full shadow-md">已採購</span>
-                            </div>
-                        </div>` : `
-                        <div class="absolute top-5 left-5 z-20">
-                            <span class="px-4 py-1.5 rounded-full text-[10px] font-black tracking-wider uppercase bg-white/80 text-slate-500 border border-white/50 shadow-sm backdrop-blur-sm">
-                                ${item.status === '已採購' ? '已採購' : '待採購'}
-                            </span>
-                        </div>`}
+                <div class="bg-white rounded-[2.5rem] overflow-hidden shadow-xl border border-slate-100 flex flex-col relative transition-all">
+                    <div class="h-52 bg-slate-50 relative overflow-hidden">
+                        ${i.image ? `<img src="${i.image}" class="w-full h-full object-cover">` : `<div class="w-full h-full flex items-center justify-center text-slate-100"><i data-lucide="image" class="w-14 h-14"></i></div>`}
+                        ${done ? `
+                        <div class="absolute inset-0 purchased-overlay flex items-center justify-center font-black text-slate-600 bg-white/70">
+                            <div class="bg-white/80 px-6 py-2 rounded-full shadow-sm text-xs tracking-widest uppercase">已採購</div>
+                        </div>` : ''}
                     </div>
-
-                    <div class="p-7 flex-1 flex flex-col ${isPurchased ? 'bg-sky-50/30 opacity-80' : ''}">
-                        <h3 class="font-black text-lg mb-1 line-clamp-1 text-slate-700">${item.name}</h3>
-                        <div class="flex flex-wrap gap-1 mb-3">${tagHtml}</div>
-                        <div class="flex items-center gap-2 text-xs font-bold mb-6 text-slate-400">
-                            <i data-lucide="user" class="w-3.5 h-3.5 opacity-50"></i>
-                            <span>${item.customer || 'Anonymous'}</span>
+                    <div class="p-7 flex-1 flex flex-col">
+                        <!-- 商品名稱與標籤放同一行 -->
+                        <div class="flex justify-between items-start gap-2 mb-1">
+                            <div class="font-black text-slate-700 text-lg line-clamp-1 flex-1">${i.name}</div>
+                            <div class="flex flex-wrap justify-end gap-1.5 shrink-0 pt-0.5">
+                                ${tagsHtml}
+                            </div>
                         </div>
+                        <div class="text-[10px] text-slate-400 font-black uppercase tracking-widest">${i.customer || 'Anonymous'}</div>
                         
-                        <div class="mt-auto flex items-center gap-2 pt-5 border-t border-slate-100/50">
-                            <button onclick="window.edit('${item.id}')" class="p-3 rounded-2xl hover:bg-slate-100 text-slate-300 hover:text-slate-500 transition-all">
-                                <i data-lucide="edit-3" class="w-4.5 h-4.5"></i>
-                            </button>
+                        <div class="mt-auto pt-6 flex items-center justify-between gap-2">
+                            <div class="flex gap-2 items-center flex-1">
+                                <button onclick="window.toggle('${i.id}')" class="flex-1 py-3 rounded-2xl text-[10px] font-black tracking-widest uppercase shadow-sm transition-all ${done ? 'bg-yellow-100 text-yellow-800 border-b-2 border-yellow-200' : 'bg-slate-50 text-slate-400 border border-slate-100'}">
+                                    ${done ? '回復待購' : '標記採購'}
+                                </button>
+                                <button onclick="window.edit('${i.id}')" class="p-3 text-slate-300 hover:text-slate-500 transition-colors"><i data-lucide="edit-3" class="w-4.5 h-4.5"></i></button>
+                            </div>
                             
-                            <button onclick="window.toggle('${item.id}')" 
-                                class="flex-1 py-3 rounded-2xl text-[11px] font-black flex items-center justify-center gap-2 shadow-sm transition-all
-                                ${isPurchased ? 'bg-yellow-100 text-yellow-800 border-b-2 border-yellow-200' : 'bg-slate-50 text-slate-400 border border-slate-200/50'}">
-                                ${isPurchased ? '<i data-lucide="rotate-ccw" class="w-4 h-4"></i> 回復' : '<i data-lucide="check-circle-2" class="w-4 h-4"></i> 標記已採購'}
-                            </button>
-                            
-                            <button onclick="window.del('${item.id}')" class="p-3 text-slate-100 hover:text-red-300 transition-all">
+                            <button onclick="window.del('${i.id}')" class="p-3 text-red-200 hover:text-red-400 transition-colors">
                                 <i data-lucide="trash-2" class="w-4.5 h-4.5"></i>
                             </button>
                         </div>
                     </div>
-                </div>
-            `}).join('');
+                </div>`;
+            }).join('');
             lucide.createIcons();
         }
 
-        document.getElementById('imageInput').addEventListener('change', (e) => {
-            const f = e.target.files[0];
-            if (!f) return;
-            const r = new FileReader();
-            r.onload = (ev) => {
-                const img = new Image();
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    const MAX_WIDTH = 400;
-                    const scale = MAX_WIDTH / img.width;
-                    canvas.width = MAX_WIDTH;
-                    canvas.height = img.height * scale;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                    base64Image = canvas.toDataURL('image/jpeg', 0.6);
-                    document.getElementById('previewImg').src = base64Image;
-                    document.getElementById('imagePreview').classList.remove('hidden');
-                    document.getElementById('uploadPlaceholder').classList.add('hidden');
-                };
-                img.src = ev.target.result;
-            };
-            r.readAsDataURL(f);
-        });
-
-        document.getElementById('itemForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            if (!isAuth) return;
-            
-            const btn = document.getElementById('submitBtn');
-            btn.disabled = true;
-            btn.innerText = 'Saving...';
-
-            const id = document.getElementById('editId').value;
-            const tagInput = document.getElementById('tags').value;
-            const tagList = tagInput ? tagInput.split(/[基,，\s]+/).filter(t => t.trim()) : [];
-            
-            const data = {
-                name: document.getElementById('name').value,
-                customer: document.getElementById('customer').value,
-                tags: tagList,
-                image: base64Image,
-                status: id ? items.find(i => i.id === id).status : '待購',
-                updatedAt: new Date().toISOString()
-            };
-            
-            try {
-                if (id) await updateDoc(getDocRef(id), data);
-                else await addDoc(getCol(), { ...data, createdAt: new Date().toISOString() });
-                close();
-            } catch (err) {
-                console.error("Save failed", err);
-            } finally {
-                btn.disabled = false;
-                btn.innerText = 'SAVE';
-            }
-        });
-
-        window.toggle = async (id) => {
-            if (!isAuth) return;
+        window.toggle = (id) => {
+            if (!isReady) return;
             const i = items.find(x => x.id === id);
-            await updateDoc(getDocRef(id), { 
-                status: i.status === '待採購' ? '已採購' : '待採購',
+            updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', id), {
+                status: i.status === '已採購' ? '待購' : '已採購',
                 updatedAt: new Date().toISOString()
             });
         };
-        
-        window.del = async (id) => { 
-            if(!isAuth) return;
-            if(confirm('Delete this record from cloud?')) await deleteDoc(getDocRef(id)); 
-        };
-        
+
+        window.del = (id) => isReady && confirm('Delete item?') && deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', id));
+
         window.edit = (id) => {
             const i = items.find(x => x.id === id);
             document.getElementById('editId').value = i.id;
             document.getElementById('name').value = i.name;
             document.getElementById('customer').value = i.customer || '';
-            document.getElementById('tags').value = (i.tags || []).join(', ');
-            base64Image = i.image;
-            if(base64Image) {
-                document.getElementById('previewImg').src = base64Image;
-                document.getElementById('imagePreview').classList.remove('hidden');
-                document.getElementById('uploadPlaceholder').classList.add('hidden');
+            document.getElementById('tags').value = (i.tags || []).join(',');
+            base64Img = i.image;
+            if(base64Img) {
+                document.getElementById('previewImg').src = base64Img;
+                document.getElementById('previewImg').classList.remove('hidden');
+                document.getElementById('uploadText').classList.add('hidden');
             }
-            document.getElementById('modalTitle').innerText = 'Edit Item';
+            document.getElementById('modalTitle').innerText = 'EDIT ITEM';
+            document.getElementById('saveBtn').innerHTML = '<span class="text-white text-xl font-black">+</span> UPDATE';
             document.getElementById('modal').classList.remove('hidden');
+        };
+
+        document.getElementById('itemForm').onsubmit = async (e) => {
+            e.preventDefault();
+            if (!isReady) return;
+            const btn = document.getElementById('saveBtn');
+            btn.disabled = true;
+            const originalHTML = btn.innerHTML;
+            btn.innerText = 'SAVING...';
+
+            const id = document.getElementById('editId').value;
+            const data = {
+                name: document.getElementById('name').value,
+                customer: document.getElementById('customer').value,
+                tags: document.getElementById('tags').value.split(',').map(t => t.trim()).filter(t => t),
+                image: base64Img,
+                updatedAt: new Date().toISOString()
+            };
+            
+            try {
+                if(id) await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'products', id), data);
+                else await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'products'), {...data, status:'待購', createdAt: new Date().toISOString()});
+                close();
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalHTML;
+            }
+        };
+
+        document.getElementById('imageInput').onchange = (e) => {
+            const f = e.target.files[0];
+            if (!f) return;
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const w = 400; canvas.width = w; canvas.height = img.height * (w/img.width);
+                    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+                    base64Img = canvas.toDataURL('image/jpeg', 0.6);
+                    document.getElementById('previewImg').src = base64Img;
+                    document.getElementById('previewImg').classList.remove('hidden');
+                    document.getElementById('uploadText').classList.add('hidden');
+                };
+                img.src = ev.target.result;
+            };
+            reader.readAsDataURL(f);
         };
 
         const close = () => {
             document.getElementById('modal').classList.add('hidden');
             document.getElementById('itemForm').reset();
-            base64Image = null;
-            document.getElementById('imagePreview').classList.add('hidden');
-            document.getElementById('uploadPlaceholder').classList.remove('hidden');
+            base64Img = null;
+            document.getElementById('previewImg').classList.add('hidden');
+            document.getElementById('uploadText').classList.remove('hidden');
         };
 
         document.getElementById('addBtn').onclick = () => { 
-            document.getElementById('editId').value=''; 
-            close(); 
-            document.getElementById('modalTitle').innerText = 'Add New Item';
+            document.getElementById('editId').value = ''; 
+            document.getElementById('modalTitle').innerText = 'ADD ITEM'; 
+            document.getElementById('saveBtn').innerHTML = '<span class="text-white text-xl font-black">+</span> SAVE';
             document.getElementById('modal').classList.remove('hidden'); 
         };
         document.getElementById('closeModal').onclick = close;
         document.getElementById('modalOverlay').onclick = close;
         document.getElementById('searchInput').oninput = render;
+
+        init();
     </script>
 </body>
 </html>
