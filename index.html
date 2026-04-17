@@ -1,3 +1,4 @@
+```html
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -12,9 +13,16 @@
         .purchased-overlay { background: rgba(224, 242, 254, 0.85); backdrop-filter: blur(2px); }
         .modal-animate { animation: slideUp 0.2s ease-out; }
         @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        
+        /* Toast 提示動畫 (改為底部彈出) */
+        .toast-animate { animation: toastInBottom 0.3s ease-out forwards; }
+        @keyframes toastInBottom { 
+            from { transform: translate(-50%, 20px); opacity: 0; } 
+            to { transform: translate(-50%, -40px); opacity: 1; } 
+        }
+
         input { -webkit-appearance: none; border-radius: 1rem; }
         
-        /* 強制正方形容器 */
         .img-container { 
             position: relative;
             width: 100%;
@@ -37,6 +45,14 @@
 </head>
 <body class="pb-10">
 
+    <!-- Toast 提示容器 (調整至底部置中) -->
+    <div id="toast" class="fixed left-1/2 -translate-x-1/2 bottom-0 z-[100] hidden">
+        <div class="bg-slate-800/90 backdrop-blur-md text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-2 toast-animate">
+            <i data-lucide="check-circle-2" class="w-5 h-5 text-emerald-400"></i>
+            <span id="toastMsg" class="font-bold tracking-widest text-sm uppercase">SUCCESS</span>
+        </div>
+    </div>
+
     <header class="sticky top-0 z-30 bg-slate-600/95 backdrop-blur-md border-b border-white/10 shadow-sm">
         <div class="max-w-5xl mx-auto px-6 py-4 flex justify-center items-center">
             <h1 class="text-white font-black tracking-[0.3em] text-lg sm:text-xl uppercase">YU.ZZZ LIST</h1>
@@ -44,7 +60,6 @@
     </header>
 
     <main class="max-w-5xl mx-auto px-4 sm:px-6 py-6">
-        <!-- 搜尋與新增按鈕 -->
         <div class="flex flex-row gap-2 sm:gap-3 mb-8 items-center">
             <div class="relative flex-[2.5]">
                 <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4"></i>
@@ -56,13 +71,10 @@
             </button>
         </div>
 
-        <!-- 商品列表 -->
-        <div id="itemsGrid" class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-8">
-            <!-- 由 JavaScript 渲染 -->
-        </div>
+        <div id="itemsGrid" class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-8"></div>
     </main>
 
-    <!-- 彈窗 -->
+    <!-- 彈窗內容保持不變 -->
     <div id="modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
         <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-md" id="modalOverlay"></div>
         <div class="bg-white rounded-[2.5rem] w-full max-w-md relative z-10 overflow-hidden shadow-2xl modal-animate">
@@ -112,6 +124,20 @@
         let items = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
         let base64Img = null;
 
+        // 顯示提示訊息函式 (Toast)
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            const toastMsg = document.getElementById('toastMsg');
+            toastMsg.innerText = msg;
+            toast.classList.remove('hidden');
+            lucide.createIcons();
+            
+            // 2秒後自動隱藏
+            setTimeout(() => {
+                toast.classList.add('hidden');
+            }, 2000);
+        }
+
         function saveData() {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
             render();
@@ -121,15 +147,20 @@
             const grid = document.getElementById('itemsGrid');
             const q = document.getElementById('searchInput').value.toLowerCase();
             
-            const list = items.filter(i => 
+            let list = items.filter(i => 
                 (i.name||'').toLowerCase().includes(q) || 
                 (i.customer||'').toLowerCase().includes(q) ||
                 (i.tags || []).some(t => t.toLowerCase().includes(q))
             );
 
+            // 排序邏輯：1.狀態優先 2.名稱筆劃/字母
             list.sort((a, b) => {
-                if (a.status === b.status) return new Date(b.updatedAt) - new Date(a.updatedAt);
-                return a.status === '已採購' ? 1 : -1;
+                if (a.status !== b.status) {
+                    return a.status === '待購' ? -1 : 1;
+                }
+                const nameA = a.name || "";
+                const nameB = b.name || "";
+                return nameA.localeCompare(nameB, 'zh-Hant-TW');
             });
 
             if (items.length === 0) {
@@ -149,10 +180,7 @@
                     </div>
                     <div class="p-3 sm:p-6 flex-1 flex flex-col">
                         <div class="mb-2">
-                            <!-- 產品名稱獨立一行 -->
                             <div class="font-black text-slate-700 text-sm sm:text-lg line-clamp-1 leading-tight uppercase mb-2">${i.name}</div>
-                            
-                            <!-- 客戶名稱與標籤平行 -->
                             <div class="flex justify-between items-center gap-2">
                                 <div class="text-[9px] sm:text-[11px] text-slate-400 font-black uppercase tracking-wider truncate flex-1">${i.customer || '匿名'}</div>
                                 <div class="flex flex-wrap justify-end">
@@ -186,6 +214,7 @@
             if(confirm('確定刪除？')) {
                 items = items.filter(x => x.id !== id);
                 saveData();
+                showToast('已刪除');
             }
         };
 
@@ -219,6 +248,7 @@
             if(id) {
                 const idx = items.findIndex(x => x.id === id);
                 items[idx] = { ...items[idx], ...data };
+                showToast('修改成功！');
             } else {
                 items.push({
                     ...data,
@@ -226,6 +256,7 @@
                     status: '待購',
                     createdAt: new Date().toISOString()
                 });
+                showToast('新增成功！');
             }
             closeModal();
             saveData();
@@ -281,3 +312,5 @@
     </script>
 </body>
 </html>
+
+```
