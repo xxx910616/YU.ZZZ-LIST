@@ -20,11 +20,11 @@
             to { transform: translate(-50%, -40px); opacity: 1; } 
         }
 
-        /* 項目高亮閃爍效果 - 改為淺黃色 */
+        /* 項目高亮閃爍效果 - 淺黃色 */
         @keyframes highlightPulse {
             0% { border-color: #FCD34D; box-shadow: 0 0 0 0px rgba(252, 211, 77, 0.6); transform: scale(1.02); }
-            70% { border-color: #FCD34D; box-shadow: 0 0 0 15px rgba(252, 211, 77, 0); transform: scale(1); }
-            100% { border-color: #f1f5f9; box-shadow: 0 0 0 0px rgba(252, 211, 77, 0); }
+            50% { border-color: #FCD34D; box-shadow: 0 0 0 15px rgba(252, 211, 77, 0.3); transform: scale(1.03); }
+            100% { border-color: #f1f5f9; box-shadow: 0 0 0 0px rgba(252, 211, 77, 0); transform: scale(1); }
         }
         .new-item-glow { animation: highlightPulse 2s ease-out forwards; border-width: 2px !important; z-index: 10; }
 
@@ -138,30 +138,36 @@
 
         function saveData() {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-            render();
+            render(); // 確保立即重新渲染
             
             if (lastAddedId) {
                 const targetId = lastAddedId;
-                setTimeout(() => {
-                    const el = document.getElementById(`item-${targetId}`);
-                    if (el) {
-                        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        setTimeout(() => { lastAddedId = null; }, 3000);
-                    }
-                }, 150);
+                // 使用 requestAnimationFrame 確保 DOM 已經更新
+                requestAnimationFrame(() => {
+                    setTimeout(() => {
+                        const el = document.getElementById(`item-${targetId}`);
+                        if (el) {
+                            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            // 3秒後移除標記，讓下次新增也能正常觸發
+                            setTimeout(() => { lastAddedId = null; }, 3000);
+                        }
+                    }, 100);
+                });
             }
         }
 
         function render() {
             const grid = document.getElementById('itemsGrid');
-            const q = document.getElementById('searchInput').value.toLowerCase();
+            const searchVal = document.getElementById('searchInput').value.trim().toLowerCase();
             
+            // 過濾邏輯
             let list = items.filter(i => 
-                (i.name||'').toLowerCase().includes(q) || 
-                (i.customer||'').toLowerCase().includes(q) ||
-                (i.tags || []).some(t => t.toLowerCase().includes(q))
+                (i.name || '').toLowerCase().includes(searchVal) || 
+                (i.customer || '').toLowerCase().includes(searchVal) ||
+                (i.tags || []).some(t => t.toLowerCase().includes(searchVal))
             );
 
+            // 排序邏輯：1. 待購優先 2. 名稱排序
             list.sort((a, b) => {
                 if (a.status !== b.status) {
                     return a.status === '待購' ? -1 : 1;
@@ -169,21 +175,26 @@
                 return (a.name || "").localeCompare(b.name || "", 'zh-Hant-TW');
             });
 
+            if (list.length === 0 && items.length > 0) {
+                grid.innerHTML = `<div class="col-span-full text-center py-20 text-slate-300 font-bold uppercase tracking-widest">沒有符合搜尋的商品</div>`;
+                return;
+            }
+
             if (items.length === 0) {
                 grid.innerHTML = `<div class="col-span-full text-center py-20 text-slate-200 font-black text-3xl opacity-40 tracking-[0.3em] uppercase">YU.ZZZ</div>`;
                 return;
             }
 
             grid.innerHTML = list.map(i => {
-                const done = i.status === '已採購';
+                const isDone = i.status === '已採購';
                 const isNew = i.id === lastAddedId; 
                 const tagHtml = (i.tags || []).map(t => `<span class="bg-slate-800 text-white px-1.5 py-0.5 rounded text-[8px] font-black ml-1 mb-1 whitespace-nowrap">#${t}</span>`).join('');
                 
                 return `
-                <div id="item-${i.id}" class="bg-white rounded-[1.2rem] sm:rounded-[2.5rem] overflow-hidden shadow-sm border border-slate-100 flex flex-col relative transition-all active:scale-[0.98] ${isNew ? 'new-item-glow' : ''}">
+                <div id="item-${i.id}" class="bg-white rounded-[1.2rem] sm:rounded-[2.5rem] overflow-hidden shadow-sm border border-slate-100 flex flex-col relative transition-all ${isNew ? 'new-item-glow' : ''}">
                     <div class="img-container">
                         ${i.image ? `<img src="${i.image}">` : `<i data-lucide="image" class="w-8 h-8 sm:w-14 sm:h-14 text-slate-100"></i>`}
-                        ${done ? `<div class="absolute inset-0 purchased-overlay flex items-center justify-center"><div class="bg-white/90 border border-sky-200 px-3 py-1 sm:px-6 sm:py-2 rounded-full shadow-md text-[8px] sm:text-xs tracking-widest uppercase text-sky-700 font-black">DONE</div></div>` : ''}
+                        ${isDone ? `<div class="absolute inset-0 purchased-overlay flex items-center justify-center"><div class="bg-white/90 border border-sky-200 px-3 py-1 sm:px-6 sm:py-2 rounded-full shadow-md text-[8px] sm:text-xs tracking-widest uppercase text-sky-700 font-black">DONE</div></div>` : ''}
                     </div>
                     <div class="p-3 sm:p-6 flex-1 flex flex-col">
                         <div class="mb-2">
@@ -194,8 +205,8 @@
                             </div>
                         </div>
                         <div class="mt-auto pt-3 sm:pt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-2 border-t border-slate-50">
-                            <button onclick="toggleStatus('${i.id}')" class="flex-1 py-2 sm:py-3 rounded-lg sm:rounded-xl text-[8px] sm:text-[10px] font-black tracking-widest uppercase shadow-sm ${done ? 'bg-yellow-100 text-yellow-800' : 'bg-slate-50 text-slate-400'}">
-                                ${done ? 'REVERT' : 'DONE'}
+                            <button onclick="toggleStatus('${i.id}')" class="flex-1 py-2 sm:py-3 rounded-lg sm:rounded-xl text-[8px] sm:text-[10px] font-black tracking-widest uppercase shadow-sm ${isDone ? 'bg-yellow-100 text-yellow-800' : 'bg-slate-50 text-slate-400'}">
+                                ${isDone ? 'REVERT' : 'DONE'}
                             </button>
                             <div class="flex justify-center gap-1">
                                 <button onclick="editItem('${i.id}')" class="p-1.5 text-slate-300"><i data-lucide="edit-3" class="w-3.5 h-3.5 sm:w-5 sm:h-5"></i></button>
@@ -224,6 +235,7 @@
 
         window.editItem = (id) => {
             const i = items.find(x => x.id === id);
+            if (!i) return;
             document.getElementById('editId').value = i.id;
             document.getElementById('name').value = i.name;
             document.getElementById('customer').value = i.customer || '';
@@ -242,8 +254,8 @@
             e.preventDefault();
             const id = document.getElementById('editId').value;
             const data = {
-                name: document.getElementById('name').value,
-                customer: document.getElementById('customer').value,
+                name: document.getElementById('name').value.trim(),
+                customer: document.getElementById('customer').value.trim(),
                 tags: document.getElementById('tags').value.split(',').map(t => t.trim()).filter(t => t),
                 image: base64Img,
                 updatedAt: new Date().toISOString()
@@ -251,14 +263,18 @@
 
             if(id) {
                 const idx = items.findIndex(x => x.id === id);
-                items[idx] = { ...items[idx], ...data };
-                showToast('修改成功！');
+                if (idx !== -1) {
+                    items[idx] = { ...items[idx], ...data };
+                    showToast('修改成功！');
+                }
             } else {
                 const newId = Date.now().toString();
-                items.push({ ...data, id: newId, status: '待購', createdAt: new Date().toISOString() });
+                const newItem = { ...data, id: newId, status: '待購', createdAt: new Date().toISOString() };
+                items.push(newItem);
                 lastAddedId = newId; 
                 showToast('新增成功！');
             }
+            
             closeModal();
             saveData();
         };
@@ -291,12 +307,13 @@
             document.getElementById('modal').classList.add('hidden');
             document.getElementById('itemForm').reset();
             base64Img = null;
+            document.getElementById('editId').value = '';
             document.getElementById('previewImg').classList.add('hidden');
             document.getElementById('uploadText').classList.remove('hidden');
         };
 
         document.getElementById('addBtn').onclick = () => { 
-            document.getElementById('editId').value = ''; 
+            closeModal();
             document.getElementById('modalTitle').innerText = 'ADD ITEM'; 
             document.getElementById('modal').classList.remove('hidden'); 
         };
@@ -304,7 +321,11 @@
         document.getElementById('modalOverlay').onclick = closeModal;
         document.getElementById('searchInput').oninput = render;
 
-        window.onload = () => { render(); lucide.createIcons(); };
+        // 初始化
+        window.onload = () => { 
+            render(); 
+            lucide.createIcons(); 
+        };
     </script>
 </body>
 </html>
