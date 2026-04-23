@@ -3,233 +3,154 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>YU.ZZZ LIST</title>
+    <title>YU.ZZZ LIST CLOUD SPEED</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
-    <style>
-        body { font-family: 'Noto Sans TC', sans-serif; background-color: #F1F5F9; color: #334155; -webkit-tap-highlight-color: transparent; }
-        .purchased-overlay { background: rgba(224, 242, 254, 0.85); backdrop-filter: blur(2px); }
-        .modal-animate { animation: slideUp 0.2s ease-out; }
-        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        
-        /* Toast 提示動畫 */
-        .toast-animate { animation: toastInBottom 0.3s ease-out forwards; }
-        @keyframes toastInBottom { 
-            from { transform: translate(-50%, 20px); opacity: 0; } 
-            to { transform: translate(-50%, -40px); opacity: 1; } 
-        }
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
-        /* 項目高亮閃爍效果 - 淺黃色 */
-        @keyframes highlightPulse {
-            0% { border-color: #FCD34D; box-shadow: 0 0 0 0px rgba(252, 211, 77, 0.6); transform: scale(1.02); }
-            50% { border-color: #FCD34D; box-shadow: 0 0 0 15px rgba(252, 211, 77, 0.3); transform: scale(1.03); }
-            100% { border-color: #f1f5f9; box-shadow: 0 0 0 0px rgba(252, 211, 77, 0); transform: scale(1); }
-        }
-        .new-item-glow { animation: highlightPulse 2s ease-out forwards; border-width: 2px !important; z-index: 10; }
+        const firebaseConfig = JSON.parse(__firebase_config);
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'yu-zzz-list';
+        const CACHE_KEY = `cache_${appId}_items`;
 
-        input { -webkit-appearance: none; border-radius: 1rem; }
-        
-        .img-container { 
-            position: relative;
-            width: 100%;
-            aspect-ratio: 1 / 1; 
-            display: flex; 
-            align-items: center; 
-            justify-content: center; 
-            background: #f8fafc; 
-            overflow: hidden;
-        }
-
-        .img-container img { width: 100%; height: 100%; object-fit: cover; }
-        .control-height { height: 52px; }
-    </style>
-</head>
-<body class="pb-10">
-
-    <!-- Toast 提示容器 -->
-    <div id="toast" class="fixed left-1/2 -translate-x-1/2 bottom-0 z-[100] hidden">
-        <div class="bg-slate-800/90 backdrop-blur-md text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-2 toast-animate">
-            <i data-lucide="check-circle-2" class="w-5 h-5 text-emerald-400"></i>
-            <span id="toastMsg" class="font-bold tracking-widest text-sm uppercase">SUCCESS</span>
-        </div>
-    </div>
-
-    <header class="sticky top-0 z-30 bg-slate-600/95 backdrop-blur-md border-b border-white/10 shadow-sm">
-        <div class="max-w-5xl mx-auto px-6 py-4 flex justify-center items-center">
-            <h1 class="text-white font-black tracking-[0.3em] text-lg sm:text-xl uppercase">YU.ZZZ LIST</h1>
-        </div>
-    </header>
-
-    <main class="max-w-5xl mx-auto px-4 sm:px-6 py-6">
-        <div class="flex flex-row gap-2 sm:gap-3 mb-8 items-center">
-            <div class="relative flex-[2.5]">
-                <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4"></i>
-                <input type="text" id="searchInput" placeholder="搜尋名稱或客戶..."
-                    class="w-full pl-9 pr-3 control-height rounded-xl sm:rounded-2xl bg-white border-none shadow-sm focus:ring-4 focus:ring-slate-200 outline-none transition-all font-bold text-slate-600 text-xs sm:text-sm">
-            </div>
-            <button id="addBtn" class="flex-1 control-height bg-yellow-100 text-yellow-800 rounded-xl sm:rounded-2xl font-black shadow-md border-b-4 border-yellow-200 active:scale-[0.98] transition-all flex items-center justify-center gap-1 sm:gap-2 uppercase tracking-widest text-[10px] sm:text-sm whitespace-nowrap px-2">
-                <span class="text-yellow-800 text-base sm:text-lg font-black">+</span> ADD
-            </button>
-        </div>
-
-        <div id="itemsGrid" class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-8"></div>
-    </main>
-
-    <!-- Modal 彈窗 -->
-    <div id="modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-md" id="modalOverlay"></div>
-        <div class="bg-white rounded-[2.5rem] w-full max-w-md relative z-10 overflow-hidden shadow-2xl modal-animate">
-            <div class="p-6 text-white flex justify-between items-center bg-slate-600">
-                <h2 id="modalTitle" class="text-lg font-black tracking-widest uppercase">ADD ITEM</h2>
-                <button id="closeModal" class="p-2 hover:bg-white/10 rounded-full transition-all">
-                    <i data-lucide="x" class="w-6 h-6"></i>
-                </button>
-            </div>
-            
-            <form id="itemForm" class="p-6 space-y-4">
-                <input type="hidden" id="editId">
-                <div>
-                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">Name</label>
-                    <input type="text" id="name" required class="w-full px-4 py-3 bg-slate-50 rounded-xl border-none font-bold text-slate-600 focus:ring-4 focus:ring-slate-100 outline-none">
-                </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">Customer</label>
-                        <input type="text" id="customer" class="w-full px-4 py-3 bg-slate-50 rounded-xl border-none font-bold text-slate-600 focus:ring-4 focus:ring-slate-100 outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">Tags</label>
-                        <input type="text" id="tags" class="w-full px-4 py-3 bg-slate-50 rounded-xl border-none font-bold text-slate-600 focus:ring-4 focus:ring-slate-100 outline-none">
-                    </div>
-                </div>
-                <div>
-                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">Photo</label>
-                    <div class="relative border-2 border-dashed border-slate-100 rounded-2xl py-6 text-center bg-slate-50 hover:bg-slate-100 transition-all cursor-pointer">
-                        <img id="previewImg" class="hidden max-h-24 mx-auto rounded-lg shadow-md mb-2">
-                        <div id="uploadText">
-                            <i data-lucide="camera" class="mx-auto w-8 h-8 text-slate-200"></i>
-                            <p class="text-[10px] mt-1 font-black text-slate-300 uppercase">Upload</p>
-                        </div>
-                        <input type="file" id="imageInput" class="absolute inset-0 opacity-0 cursor-pointer" accept="image/*">
-                    </div>
-                </div>
-                <button type="submit" id="saveBtn" class="w-full py-4 bg-slate-600 text-white font-black rounded-2xl shadow-lg active:scale-95 border-b-4 border-slate-700 transition-all uppercase tracking-widest flex items-center justify-center gap-2">
-                    SAVE
-                </button>
-            </form>
-        </div>
-    </div>
-
-    <script>
-        const STORAGE_KEY = 'yu_zzz_local_data';
-        let items = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+        let items = [];
         let base64Img = null;
-        let lastAddedId = null; 
+        let currentUser = null;
 
-        function showToast(msg) {
+        // 1. 優先從本地讀取快取 (實現秒開)
+        const loadCache = () => {
+            const cached = localStorage.getItem(CACHE_KEY);
+            if (cached) {
+                try {
+                    items = JSON.parse(cached);
+                    render(); // 立即渲染本地數據
+                } catch (e) { console.error("快取解析失敗", e); }
+            }
+        };
+
+        // 顯示 Toast
+        window.showToast = (msg, type = 'success') => {
             const toast = document.getElementById('toast');
             const toastMsg = document.getElementById('toastMsg');
+            const toastIcon = document.getElementById('toastIcon');
             toastMsg.innerText = msg;
+            toastIcon.className = type === 'success' ? 'w-5 h-5 text-emerald-400' : 'w-5 h-5 text-rose-400';
             toast.classList.remove('hidden');
             lucide.createIcons();
             setTimeout(() => toast.classList.add('hidden'), 2000);
-        }
+        };
 
-        function saveData() {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-            render(); // 確保立即重新渲染
-            
-            if (lastAddedId) {
-                const targetId = lastAddedId;
-                // 使用 requestAnimationFrame 確保 DOM 已經更新
-                requestAnimationFrame(() => {
-                    setTimeout(() => {
-                        const el = document.getElementById(`item-${targetId}`);
-                        if (el) {
-                            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            // 3秒後移除標記，讓下次新增也能正常觸發
-                            setTimeout(() => { lastAddedId = null; }, 3000);
-                        }
-                    }, 100);
-                });
-            }
-        }
-
-        function render() {
+        // 渲染引擎
+        const render = () => {
             const grid = document.getElementById('itemsGrid');
+            const emptyState = document.getElementById('emptyState');
             const searchVal = document.getElementById('searchInput').value.trim().toLowerCase();
             
-            // 過濾邏輯
             let list = items.filter(i => 
                 (i.name || '').toLowerCase().includes(searchVal) || 
                 (i.customer || '').toLowerCase().includes(searchVal) ||
                 (i.tags || []).some(t => t.toLowerCase().includes(searchVal))
             );
 
-            // 排序邏輯：1. 待購優先 2. 名稱排序
             list.sort((a, b) => {
-                if (a.status !== b.status) {
-                    return a.status === '待購' ? -1 : 1;
-                }
-                return (a.name || "").localeCompare(b.name || "", 'zh-Hant-TW');
+                if (a.status !== b.status) return a.status === '待購' ? -1 : 1;
+                return new Date(b.createdAt) - new Date(a.createdAt);
             });
 
-            if (list.length === 0 && items.length > 0) {
-                grid.innerHTML = `<div class="col-span-full text-center py-20 text-slate-300 font-bold uppercase tracking-widest">沒有符合搜尋的商品</div>`;
-                return;
-            }
-
             if (items.length === 0) {
-                grid.innerHTML = `<div class="col-span-full text-center py-20 text-slate-200 font-black text-3xl opacity-40 tracking-[0.3em] uppercase">YU.ZZZ</div>`;
+                grid.innerHTML = '';
+                emptyState.classList.remove('hidden');
                 return;
+            } else {
+                emptyState.classList.add('hidden');
             }
 
             grid.innerHTML = list.map(i => {
                 const isDone = i.status === '已採購';
-                const isNew = i.id === lastAddedId; 
-                const tagHtml = (i.tags || []).map(t => `<span class="bg-slate-800 text-white px-1.5 py-0.5 rounded text-[8px] font-black ml-1 mb-1 whitespace-nowrap">#${t}</span>`).join('');
+                const tagHtml = (i.tags || []).map(t => `<span class="bg-slate-800 text-white px-1.5 py-0.5 rounded text-[8px] font-black ml-1 mb-1">#${t}</span>`).join('');
                 
                 return `
-                <div id="item-${i.id}" class="bg-white rounded-[1.2rem] sm:rounded-[2.5rem] overflow-hidden shadow-sm border border-slate-100 flex flex-col relative transition-all ${isNew ? 'new-item-glow' : ''}">
+                <div id="item-${i.id}" class="bg-white rounded-[1.2rem] sm:rounded-[2.5rem] overflow-hidden shadow-sm border border-slate-100 flex flex-col relative transition-all">
                     <div class="img-container">
-                        ${i.image ? `<img src="${i.image}">` : `<i data-lucide="image" class="w-8 h-8 sm:w-14 sm:h-14 text-slate-100"></i>`}
-                        ${isDone ? `<div class="absolute inset-0 purchased-overlay flex items-center justify-center"><div class="bg-white/90 border border-sky-200 px-3 py-1 sm:px-6 sm:py-2 rounded-full shadow-md text-[8px] sm:text-xs tracking-widest uppercase text-sky-700 font-black">DONE</div></div>` : ''}
+                        ${i.image ? `<img src="${i.image}" loading="lazy">` : `<i data-lucide="image" class="w-8 h-8 text-slate-100"></i>`}
+                        ${isDone ? `<div class="absolute inset-0 purchased-overlay flex items-center justify-center"><div class="bg-white/90 border border-sky-200 px-3 py-1 rounded-full shadow-md text-[8px] sm:text-xs tracking-widest uppercase text-sky-700 font-black">DONE</div></div>` : ''}
                     </div>
                     <div class="p-3 sm:p-6 flex-1 flex flex-col">
                         <div class="mb-2">
                             <div class="font-black text-slate-700 text-sm sm:text-lg line-clamp-1 leading-tight uppercase mb-2">${i.name}</div>
                             <div class="flex justify-between items-center gap-2">
-                                <div class="text-[9px] sm:text-[11px] text-slate-400 font-black uppercase tracking-wider truncate flex-1">${i.customer || '匿名'}</div>
+                                <div class="text-[9px] sm:text-[11px] text-slate-400 font-black uppercase truncate flex-1">${i.customer || '匿名'}</div>
                                 <div class="flex flex-wrap justify-end">${tagHtml}</div>
                             </div>
                         </div>
-                        <div class="mt-auto pt-3 sm:pt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-2 border-t border-slate-50">
-                            <button onclick="toggleStatus('${i.id}')" class="flex-1 py-2 sm:py-3 rounded-lg sm:rounded-xl text-[8px] sm:text-[10px] font-black tracking-widest uppercase shadow-sm ${isDone ? 'bg-yellow-100 text-yellow-800' : 'bg-slate-50 text-slate-400'}">
+                        <div class="mt-auto pt-3 flex flex-col sm:flex-row items-stretch gap-2 border-t border-slate-50">
+                            <button onclick="window.toggleStatus('${i.id}')" class="flex-1 py-2 rounded-lg text-[8px] sm:text-[10px] font-black tracking-widest uppercase shadow-sm ${isDone ? 'bg-yellow-100 text-yellow-800' : 'bg-slate-50 text-slate-400'}">
                                 ${isDone ? 'REVERT' : 'DONE'}
                             </button>
-                            <div class="flex justify-center gap-1">
-                                <button onclick="editItem('${i.id}')" class="p-1.5 text-slate-300"><i data-lucide="edit-3" class="w-3.5 h-3.5 sm:w-5 sm:h-5"></i></button>
-                                <button onclick="deleteItem('${i.id}')" class="p-1.5 text-red-100"><i data-lucide="trash-2" class="w-3.5 h-3.5 sm:w-5 sm:h-5"></i></button>
+                            <div class="flex justify-center gap-2">
+                                <button onclick="window.editItem('${i.id}')" class="p-2 text-slate-300"><i data-lucide="edit-3" class="w-4 h-4 sm:w-5 sm:h-5"></i></button>
+                                <button onclick="window.deleteItem('${i.id}')" class="p-2 text-rose-300"><i data-lucide="trash-2" class="w-4 h-4 sm:w-5 sm:h-5"></i></button>
                             </div>
                         </div>
                     </div>
                 </div>`;
             }).join('');
             lucide.createIcons();
-        }
-
-        window.toggleStatus = (id) => {
-            const idx = items.findIndex(x => x.id === id);
-            items[idx].status = items[idx].status === '已採購' ? '待購' : '已採購';
-            saveData();
         };
 
-        window.deleteItem = (id) => {
-            if(confirm('確定刪除？')) {
-                items = items.filter(x => x.id !== id);
-                saveData();
-                showToast('已刪除');
+        // 初始化 Auth 與 Firestore 監聽
+        const init = async () => {
+            loadCache(); // 先加載本地資料
+
+            const initAuth = async () => {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            };
+            
+            await initAuth();
+
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    currentUser = user;
+                    const q = collection(db, 'artifacts', appId, 'public', 'data', 'items');
+                    onSnapshot(q, (snapshot) => {
+                        const newItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        items = newItems;
+                        // 儲存到本地快取
+                        localStorage.setItem(CACHE_KEY, JSON.stringify(items));
+                        render();
+                        document.getElementById('loading').classList.add('hidden');
+                    }, (err) => {
+                        console.error("監聽失敗", err);
+                        window.showToast('連線異常', 'error');
+                    });
+                }
+            });
+        };
+
+        // 全域功能
+        window.toggleStatus = async (id) => {
+            if (!currentUser) return;
+            const item = items.find(x => x.id === id);
+            const newStatus = item.status === '已採購' ? '待購' : '已採購';
+            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'items', id), { status: newStatus });
+        };
+
+        window.deleteItem = async (id) => {
+            if (!currentUser) return;
+            if (confirm('確定要刪除嗎？')) {
+                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'items', id));
+                window.showToast('已刪除');
             }
         };
 
@@ -250,8 +171,10 @@
             document.getElementById('modal').classList.remove('hidden');
         };
 
-        document.getElementById('itemForm').onsubmit = (e) => {
+        document.getElementById('itemForm').onsubmit = async (e) => {
             e.preventDefault();
+            if (!currentUser) return;
+
             const id = document.getElementById('editId').value;
             const data = {
                 name: document.getElementById('name').value.trim(),
@@ -261,22 +184,22 @@
                 updatedAt: new Date().toISOString()
             };
 
-            if(id) {
-                const idx = items.findIndex(x => x.id === id);
-                if (idx !== -1) {
-                    items[idx] = { ...items[idx], ...data };
-                    showToast('修改成功！');
+            try {
+                if (id) {
+                    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'items', id), data);
+                    window.showToast('修改成功');
+                } else {
+                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'items'), {
+                        ...data,
+                        status: '待購',
+                        createdAt: new Date().toISOString()
+                    });
+                    window.showToast('新增成功');
                 }
-            } else {
-                const newId = Date.now().toString();
-                const newItem = { ...data, id: newId, status: '待購', createdAt: new Date().toISOString() };
-                items.push(newItem);
-                lastAddedId = newId; 
-                showToast('新增成功！');
+                closeModal();
+            } catch (err) {
+                window.showToast('儲存失敗', 'error');
             }
-            
-            closeModal();
-            saveData();
         };
 
         document.getElementById('imageInput').onchange = (e) => {
@@ -287,13 +210,11 @@
                 const img = new Image();
                 img.onload = () => {
                     const canvas = document.createElement('canvas');
-                    const w = 600; canvas.width = w; canvas.height = w;
+                    const w = 400; canvas.width = w; canvas.height = w;
                     const ctx = canvas.getContext('2d');
                     const side = Math.min(img.width, img.height);
-                    const sx = (img.width - side) / 2;
-                    const sy = (img.height - side) / 2;
-                    ctx.drawImage(img, sx, sy, side, side, 0, 0, w, w);
-                    base64Img = canvas.toDataURL('image/jpeg', 0.8);
+                    ctx.drawImage(img, (img.width-side)/2, (img.height-side)/2, side, side, 0, 0, w, w);
+                    base64Img = canvas.toDataURL('image/jpeg', 0.6);
                     document.getElementById('previewImg').src = base64Img;
                     document.getElementById('previewImg').classList.remove('hidden');
                     document.getElementById('uploadText').classList.add('hidden');
@@ -312,20 +233,90 @@
             document.getElementById('uploadText').classList.remove('hidden');
         };
 
-        document.getElementById('addBtn').onclick = () => { 
-            closeModal();
-            document.getElementById('modalTitle').innerText = 'ADD ITEM'; 
-            document.getElementById('modal').classList.remove('hidden'); 
-        };
+        document.getElementById('addBtn').onclick = () => { closeModal(); document.getElementById('modal').classList.remove('hidden'); };
         document.getElementById('closeModal').onclick = closeModal;
         document.getElementById('modalOverlay').onclick = closeModal;
         document.getElementById('searchInput').oninput = render;
 
-        // 初始化
-        window.onload = () => { 
-            render(); 
-            lucide.createIcons(); 
-        };
+        window.onload = init;
     </script>
+
+    <style>
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: #F1F5F9; color: #334155; -webkit-tap-highlight-color: transparent; }
+        .purchased-overlay { background: rgba(224, 242, 254, 0.85); backdrop-filter: blur(2px); }
+        .modal-animate { animation: slideUp 0.2s ease-out; }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .img-container { position: relative; width: 100%; aspect-ratio: 1 / 1; display: flex; align-items: center; justify-content: center; background: #f8fafc; overflow: hidden; }
+        .img-container img { width: 100%; height: 100%; object-fit: cover; }
+        .control-height { height: 52px; }
+        .loading-pulse { animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    </style>
+</head>
+<body class="pb-10">
+
+    <!-- 全螢幕加載狀態 (僅在完全沒資料時顯示) -->
+    <div id="loading" class="fixed inset-0 z-[60] bg-slate-900/10 backdrop-blur-sm flex items-center justify-center hidden">
+        <div class="bg-white p-6 rounded-3xl shadow-xl flex flex-col items-center gap-3">
+            <div class="w-10 h-10 border-4 border-slate-600 border-t-transparent rounded-full animate-spin"></div>
+            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Syncing Cloud...</p>
+        </div>
+    </div>
+
+    <div id="toast" class="fixed left-1/2 -translate-x-1/2 bottom-10 z-[100] hidden">
+        <div class="bg-slate-800 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-2">
+            <i data-lucide="info" id="toastIcon" class="w-5 h-5"></i>
+            <span id="toastMsg" class="font-bold tracking-widest text-sm uppercase"></span>
+        </div>
+    </div>
+
+    <header class="sticky top-0 z-30 bg-slate-600/95 backdrop-blur-md border-b border-white/10 shadow-sm">
+        <div class="max-w-5xl mx-auto px-6 py-4 flex justify-center items-center">
+            <h1 class="text-white font-black tracking-[0.3em] text-lg uppercase">YU.ZZZ LIST CLOUD</h1>
+        </div>
+    </header>
+
+    <main class="max-w-5xl mx-auto px-4 py-6">
+        <div class="flex gap-2 mb-8 items-center">
+            <div class="relative flex-[2.5]">
+                <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4"></i>
+                <input type="text" id="searchInput" placeholder="搜尋..." class="w-full pl-9 pr-3 control-height rounded-xl bg-white border-none shadow-sm outline-none font-bold text-slate-600 text-sm">
+            </div>
+            <button id="addBtn" class="flex-1 control-height bg-yellow-100 text-yellow-800 rounded-xl font-black shadow-md border-b-4 border-yellow-200 active:scale-95 transition-all text-sm tracking-widest">
+                + ADD
+            </button>
+        </div>
+
+        <div id="emptyState" class="hidden col-span-full text-center py-20">
+            <div class="text-slate-200 font-black text-3xl opacity-40 tracking-[0.3em] uppercase">YU.ZZZ</div>
+            <p class="text-slate-400 text-[10px] mt-2 font-bold uppercase tracking-widest">No Items Found</p>
+        </div>
+
+        <div id="itemsGrid" class="grid grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-8"></div>
+    </main>
+
+    <div id="modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-md" id="modalOverlay"></div>
+        <div class="bg-white rounded-[2.5rem] w-full max-w-md relative z-10 overflow-hidden shadow-2xl modal-animate">
+            <div class="p-6 text-white flex justify-between items-center bg-slate-600">
+                <h2 id="modalTitle" class="text-lg font-black tracking-widest uppercase">ADD ITEM</h2>
+                <button id="closeModal" class="p-2 hover:bg-white/10 rounded-full transition-all"><i data-lucide="x" class="w-6 h-6"></i></button>
+            </div>
+            <form id="itemForm" class="p-6 space-y-4">
+                <input type="hidden" id="editId">
+                <input type="text" id="name" required placeholder="商品名稱" class="w-full px-4 py-3 bg-slate-50 rounded-xl border-none font-bold outline-none">
+                <div class="grid grid-cols-2 gap-3">
+                    <input type="text" id="customer" placeholder="客戶名" class="w-full px-4 py-3 bg-slate-50 rounded-xl border-none font-bold outline-none">
+                    <input type="text" id="tags" placeholder="標籤" class="w-full px-4 py-3 bg-slate-50 rounded-xl border-none font-bold outline-none">
+                </div>
+                <div class="relative border-2 border-dashed border-slate-100 rounded-2xl py-8 text-center bg-slate-50 cursor-pointer">
+                    <img id="previewImg" class="hidden max-h-32 mx-auto rounded-lg mb-2">
+                    <div id="uploadText"><i data-lucide="camera" class="mx-auto w-10 h-10 text-slate-200"></i><p class="text-[10px] font-black text-slate-300 uppercase">Upload Photo</p></div>
+                    <input type="file" id="imageInput" class="absolute inset-0 opacity-0 cursor-pointer" accept="image/*">
+                </div>
+                <button type="submit" class="w-full py-4 bg-slate-600 text-white font-black rounded-2xl shadow-lg border-b-4 border-slate-700 tracking-widest">SAVE</button>
+            </form>
+        </div>
+    </div>
 </body>
 </html>
